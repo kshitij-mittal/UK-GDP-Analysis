@@ -1,0 +1,163 @@
+---
+title: "Final Project"
+author: "Swathi Ganesan"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+subtitle: MSCA 31006 Time Series Analysis and Forecasting
+---
+
+```{r setup, include=FALSE, cache=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+```
+
+
+```{r, message=FALSE, echo=FALSE}
+# Load required packages
+library(readxl)
+library(ggplot2)
+library(forecast)
+library(ggseas)
+library(zoo)
+library(tseries)
+```
+
+```{r}
+# Read the Excel file
+data <- read_excel("TS_Project_Data.xlsx")
+
+# Convert the 'Period' column to year-quarter format
+data$Period <- as.yearqtr(data$Period, format = "%Y Q%q")
+
+# Visualize the time series
+ggplot(data, aes(x = Period, y = GDP)) +
+  geom_line() +
+  labs(title = "GDP Time Series", y = "GDP")
+
+ggplot(data, aes(x = Period, y = InterestRates_AssetPrices)) +
+  geom_line() +
+  labs(title = "InterestRates & AssetPrices Time Series", y = "InterestRates & AssetPrices %pa")
+
+ggplot(data, aes(x = Period, y = Labour_Capital_Prod)) +
+  geom_line() +
+  labs(title = "Labour, Capital & Productivity", y = "Labour, Capital & Productivity")
+
+ggplot(data, aes(x = Period, y = IPI)) +
+  geom_line() +
+  labs(title = "Industrial Production Index", y = "Industrial Production Index")
+
+```
+
+```{r}
+
+# Convert "Period" to a Date object
+data$Period <- as.Date(paste(data$Period, "01", sep = "-"), format = "%Y Q%m-%d")
+
+# Extract year and quarter components
+data$Year <- as.numeric(format(data$Period, "%Y"))
+data$Quarter <- as.numeric(format(data$Period, "%m"))
+```
+
+```{r}
+# Create a time series object
+ts_gdp <- ts(data$GDP, start = c(data$Year[1], data$Quarter[1]), frequency = 4)
+
+#Plotting the time series
+tsdisplay(ts_gdp)
+
+#decompose data
+dedat <- decompose(ts_gdp)
+plot(dedat)
+```
+We can observe a trend in the GDP data.
+
+```{r}
+# Test for stationarity
+
+# Perform ADF test
+adf_test <- adf.test(ts_gdp)
+print(adf_test)
+kpss_test <- kpss.test(ts_gdp)
+print(kpss_test)
+```
+
+Augmented Dickey-Fuller (ADF) Test:
+Interpretation: Since the p-value (0.6195) is greater than the significance level (usually 0.05), we fail to reject the null hypothesis. This suggests that the time series is not stationary.
+
+KPSS Test for Level Stationarity:
+Interpretation: The p-value (0.01) is less than the significance level, which suggests that we can reject the null hypothesis. This indicates that the time series is likely non-stationary.
+
+In summary, both tests suggest that the time series data is non-stationary.
+
+Since the data is non-stationary, you may need to perform differencing to make it stationary before proceeding with time series analysis and forecasting.
+
+```{r}
+# Differencing the time series
+ts_gdp_diff <- diff(ts_gdp)
+
+# Check the stationarity of the differenced series using ADF and KPSS tests
+adf_test_result_diff <- adf.test(ts_gdp_diff)
+kpss_test_result_diff <- kpss.test(ts_gdp_diff)
+
+print(adf_test_result_diff)
+print(kpss_test_result_diff)
+```
+
+Augmented Dickey-Fuller (ADF) Test:
+Interpretation: The p-value (0.01) is less than the significance level, which allows us to reject the null hypothesis. This suggests that the differenced time series is likely stationary.
+
+KPSS Test for Level Stationarity:
+Interpretation: The p-value (0.09535) is greater than the significance level (usually 0.05), which suggests that we fail to reject the null hypothesis. This indicates that the differenced time series is likely stationary.
+
+```{r}
+# Perform train-test split
+train_data <- window(ts_gdp, end = c(2009, 4))  # Training data until 2009 Q4
+test_data <- window(ts_gdp, start = c(2010, 1)) # Test data from 2010 Q1 onwards
+number_of_forecasts = 24
+
+# Plot time series of train and test data
+ggplot() +
+  geom_line(data = as.data.frame(train_data), aes(x = time(train_data), y = train_data), color = "blue", linetype = "solid", size = 1) +
+  geom_line(data = as.data.frame(test_data), aes(x = time(test_data), y = test_data), color = "red", linetype = "solid", size = 1) +
+  labs(title = "Time Series of Train and Test Data", x = "Year", y = "Value") +
+  theme_minimal()
+```
+
+
+Exponential smoothing is a popular method used in time series forecasting to predict future values based on the weighted average of past observations. It is particularly useful for forecasting data with a level and no clear trend or seasonality.
+Double Exponential Smoothing (Holt's Linear Exponential Smoothing): This method is used for data with a trend but no seasonality. It includes two smoothing parameters (alpha and beta) to capture the level and trend components.
+
+```{r}
+# Perform first-order differencing to make the data stationary
+diff_gdp_train <- diff(train_data)
+
+double_exp_fit <- HoltWinters(diff_gdp_train, beta = TRUE)
+forecast_values <- forecast(double_exp_fit, h = number_of_forecasts)
+
+# Print the original data, differenced data, and final forecasts
+# Plot original data, differenced data, and forecasted values
+plot(train_data, main = "Original Data")
+plot(diff_gdp_train, main = "Differenced Data")
+plot(forecast_values, main = "Forecasted Values")
+
+```
+
+```{r}
+# Check residuals
+residuals <- residuals(forecast_values)
+checkresiduals(residuals)
+```
+
+```{r}
+# Calculate squared differences between forecast and actual values
+squared_diff <- (forecast_values$mean - test_data)^2
+
+# Compute RMSE
+rmse <- sqrt(mean(squared_diff))
+
+# Print RMSE
+print(paste("RMSE:", rmse))
+#### NOTE THIS FORECAST IS DIFFERENCED DATA BUT THE TEST IS ACTUALS. WE NEED TO DE-DIFFERENCE THE FORECAST AND THEN COMPUTE ACCURACY
+```
