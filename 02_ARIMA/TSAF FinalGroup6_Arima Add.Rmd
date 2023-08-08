@@ -246,10 +246,6 @@ print(paste("RMSE:", rmse_hw))
 
 
 
-
-
-
-
 ### ARIMA model fit. - Jeniffer 
 
 
