@@ -1,0 +1,406 @@
+---
+title: "kshitji"
+author: "Jeniffer Lee"
+date: "2023-08-08"
+output: html_document
+---
+
+# ARIMA MODELING
+```{r setup, include=FALSE, cache=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+```
+
+
+## Importing Libraries
+```{r, message=FALSE, echo=FALSE}
+# Load required packages
+library(readxl)
+library(ggplot2)
+library(forecast)
+library(ggseas)
+library(zoo)
+library(tseries)
+library(fpp)
+library(MASS)
+library(ggplot2)
+
+library(TSA)
+```
+
+## Loading Data
+```{r}
+
+# Read the Excel file
+data <- read_excel("/Users/jenifferlee/Desktop/2023_Summer/TimeSeries/Final project/TS_Project_Data.xlsx")
+
+# Convert the 'Period' column to year-quarter format
+data$Period <- as.yearqtr(data$Period, format = "%Y Q%q")
+
+# Convert "Period" to a Date object
+data$Period <- as.Date(paste(data$Period, "01", sep = "-"), format = "%Y Q%m-%d")
+
+# Extract year and quarter components
+data$Year <- as.numeric(format(data$Period, "%Y"))
+data$Quarter <- as.numeric(format(data$Period, "%m"))
+
+# Create a time series object
+ts_gdp <- ts(data$GDP, start = c(data$Year[1], data$Quarter[1]), frequency = 4)
+
+```
+
+# Plot the Time Series
+```{r}
+#Plotting the time series
+plot(ts_gdp, ylab = "UK GDP", main = "Quarterly UK GDP (1955 - 2015)") 
+
+tsdisplay(ts_gdp, main = "UK GDP between 1955 and 2015")
+```
+As the above, ACF is not tailing off. So, we need to make the data the stationary data before building a model by considering BOXCOX transformation or differencing. 
+
+
+
+
+## Assumption 1 - Constant Variance using BoxPlot Transformation
+
+
+```{r}
+par(mfrow = c(4, 3))
+autoplot(ts_gdp)
+ts_gdp %>% BoxCox(lambda = -1) %>% autoplot()
+ts_gdp %>% BoxCox(lambda = -0.5) %>% autoplot()
+ts_gdp %>% BoxCox(lambda = 0.0) %>% autoplot()
+ts_gdp %>% BoxCox(lambda = 0.5) %>% autoplot()
+ts_gdp %>% BoxCox(lambda = 0.5) %>% autoplot()
+lambda <-BoxCox.lambda(ts_gdp)
+lambda
+```
+```{r}
+# Load required packages
+bc_lambda=BoxCox.lambda(ts_gdp)
+ts_gdp %>% BoxCox(lambda = bc_lambda) %>% autoplot()
+
+#par(mfrow = c(2, 3))
+
+#plot(ts_gdp, ylab = "UK GDP", main = "Quarterly UK GDP (1955 - 2015)") 
+ts_gpd_bc = BoxCox(ts_gdp, lambda = bc_lambda)
+
+# If the data show variation that increases or decreases with the level of the series, then a boxcox transformation can be useful.
+```
+
+ARIMA uses previous lags of series to model its behavior; therefore, modeling stable series with consistent properties involves less uncertainty.
+
+```{r}
+# RUNNING ADF AND KPISS TEST
+adf_test <- adf.test(ts_gpd_bc)
+print(adf_test)
+kpss_test <- kpss.test(ts_gpd_bc)
+print(kpss_test)
+
+```
+ADF test's P-value: 0.11 > 0.05 --> fail to reject the Null(time series has a unitroot and non-stationary)
+KPSS test's P-value: 0.01 < 0.05 --> reject the Null(the timeseries is stationary).  
+
+Data itself can be seen as non-stationary
+
+
+### what about the first order of differencing with boxcox transformed GDP.
+
+```{r}
+# Differencing the time series
+ts_gdp_bc_diff <- diff(ts_gpd_bc)
+
+# Check the stationarity of the differenced series using ADF and KPSS tests
+adf_test_result_diff <- adf.test(ts_gdp_bc_diff)
+kpss_test_result_diff <- kpss.test(ts_gdp_bc_diff)
+
+print(adf_test_result_diff)
+print(kpss_test_result_diff)
+
+tsdisplay(ts_gdp_bc_diff)
+```
+
+Data seems stationary post single order differencing.
+From observations, we can see an exponential decay in the ACF plot, along with hard drops in the PACF plot.
+This indicates that the process might be an Autoregressive process of Order 3 
+
+Since both ACF and PACF are trailing off, this model can also be an ARMA model 
+
+## Dividing into Train and Test prior to Model Fitting
+```{r}
+# Perform train-test split
+ts_gdp_train <- window(ts_gdp, end = c(2010, 4))  # Training data until 2009 Q4
+ts_gdp_test <- window(ts_gdp, start = c(2011, 1)) # Test data from 2010 Q1 onwards
+number_of_forecasts = 20
+
+# Plot time series of train and test data
+ggplot() +
+  geom_line(data = as.data.frame(ts_gdp_train), aes(x = time(ts_gdp_train), y = ts_gdp_train), color = "blue", linetype = "solid", size = 1) +
+  geom_line(data = as.data.frame(ts_gdp_test), aes(x = time(ts_gdp_test), y = ts_gdp_test), color = "red", linetype = "solid", size = 1) +
+  labs(title = "Time Series of Train and Test Data", x = "Year", y = "Value") +
+  theme_minimal()
+```
+
+## Model Fitting - Non Seasonal Auto Arima
+
+```{r}
+auto.arima(ts_gdp_train,seasonal=FALSE, lambda = bc_lambda, trace = TRUE)
+
+# RUNNING EACF ON FIRST ORDER DIFFERENCE TRAIN DATA
+eacf(diff(ts_gdp_train))
+```
+
+Auto Arima is giving a best model of ARIMA(0,1,3) - indicating the absence of an auto-regression component and only moving average.
+Differencing (Integration) of order 1 is consistent with our prior observations.
+
+EACF run for first order differenced data also indicates using (1,1) and (1,3) models. We can run these also to check if we observe better model fits
+
+
+```{r}
+fit_ar1=Arima(ts_gdp_train, order=c(0,1,3), include.drift = TRUE, lambda = bc_lambda) 
+fit_ar2=Arima(ts_gdp_train, order=c(1,1,1), include.drift = TRUE, lambda = bc_lambda) 
+fit_ar3=Arima(ts_gdp_train, order=c(1,1,3), include.drift = TRUE, lambda = bc_lambda) 
+
+fit_ar1$aicc
+fit_ar2$aicc
+fit_ar3$aicc
+```
+
+We are still getting the Auto Arima indicated ARIMA(0,1,3) model with drift.
+We will now check forecasts from this model
+
+## Analysing Forecasts from the Non-Seasonal Arima Model
+```{r}
+forecast_arima=forecast(fit_ar1, h= number_of_forecasts)
+plot(forecast_arima, main = "Arima(0,1,3) Forecasted Values")
+
+# Check residuals
+checkresiduals(residuals(forecast_arima))
+```
+The residuals look normally distributed with no siginficant auto-correlation at any lags.
+The model also passes the Ljung Box test, and we cannot reject the null hypothesis that there is no auto-correlation in the residuals.
+
+```{r}
+# Checking for RMSE
+squared_diff_arima <- (forecast_arima$mean - ts_gdp_test)^2
+rmse_arima <- sqrt(mean(squared_diff_arima))
+
+# Print RMSE
+print(paste("RMSE:", rmse_arima))
+```
+
+
+```{r}
+#summary(forecast_arima)
+```
+
+
+
+## SARIMA Modeling 
+
+
+## Assumption 2 - Stationarity is important for fitting Arima Models
+
+As we can see the results of decomposition, even though it is hard to verify seasonality of the data with our own eyes, there seems to be a seasonality. So, seasonal Arima model could suggest a better model to explain the UK GDP. 
+
+```{r}
+plot(decompose(ts_gdp))
+```
+
+
+### Seasonal differencing is needed for Seasonal Arima
+```{r}
+ts_gdp_bc_diff_sdiff <- diff(ts_gdp_bc_diff, difference = 4)
+
+# Check the stationarity of the differenced series using ADF and KPSS tests
+adf_test_result_diff_sdiff <- adf.test(ts_gdp_bc_diff_sdiff)
+kpss_test_result_diff_sdiff <- kpss.test(ts_gdp_bc_diff_sdiff)
+
+print(adf_test_result_diff_sdiff)
+print(kpss_test_result_diff_sdiff)
+
+tsdisplay(ts_gdp_bc_diff_sdiff)
+
+``` 
+ADF test's P-value: 0.01 < 0.05 ==> reject the null(timeseries contains a unitroot and non-stationary)
+KPSS test's P-value: 0.1 > 0.05 ==> fail to reject the null(timeseries is stationary) 
+
+==Data adjusted by Boxcox,1st differencing and seasonal differencing get stationary. 
+
+
+
+
+## Model Fitting 2 - Seasonal Auto Arima
+```{r}
+Model_sarima <-auto.arima(ts_gdp_train,seasonal=TRUE, lambda = bc_lambda, trace = TRUE)
+Model_sarima
+# RUNNING EACF ON FIRST ORDER DIFFERENCE and boxcox tranformed TRAIN DATA wrapping in seasonal differencing.
+eacf(ts_gdp_bc_diff_sdiff)
+```
+
+
+EACF run for seasonal differenced data indicates using (1,2) and (2,2) models. We can run these also to check if we observe better model fits
+
+
+```{r}
+fit_sar1=Arima(ts_gdp_train, order=c(2,1,2), seasonal = list(order = c(0,0,2),period=4), include.drift = TRUE, lambda = bc_lambda) 
+fit_sar2=Arima(ts_gdp_train, order=c(2,1,2), seasonal = list(order = c(1,0,2),period=4), include.drift = TRUE, lambda = bc_lambda) 
+fit_sar3=Arima(ts_gdp_train, order=c(2,1,2), seasonal = list(order = c(2,0,2),period=4), include.drift = TRUE, lambda = bc_lambda) 
+
+fit_sar1$aicc
+fit_sar2$aicc
+fit_sar3$aicc
+```
+
+```{r}
+checkresiduals(Model_sarima)
+
+```
+
+Jung test shows that p-value is 0.27 > 0.05 --> fail to reject(accept) the null hypothesis(the Timeseries is independently distributed)
+
+
+```{r}
+checkresiduals(fit_sar2)
+
+```
+
+
+As the AICc score of (2,1,2)(1,0,2)[4] among them was the lowest, we are changing the SArima indicated SARIMA(2,1,2)(1,0,2)[4] model with drift.
+We will now check forecasts from this model
+
+
+## Analysing Forecasts from the Seasonal Arima Model
+```{r}
+forecast_sarima=forecast(Model_sarima, h= number_of_forecasts)
+plot(forecast_sarima, main = "Sarima(2,1,2)(0,0,2)[4] Forecasted Values")
+
+
+```
+
+The residuals look normally distributed with no siginficant auto-correlation at any lags.
+The model also passes the Ljung Box test, and we cannot reject the null hypothesis that there is no auto-correlation in the residuals.
+
+
+```{r}
+# Checking for RMSE
+#ts_gdp_test_bc = BoxCox(ts_gdp_test, lambda = bc_lambda).  BIG
+#ts_gdp_test_diff <- diff(ts_gdp_test_bc).  BIG
+#ts_gdp_test_bc_diff_sdiff <-diff(ts_gdp_test_diff, difference =4) BIG
+
+squared_diff_sarima <- (forecast_sarima$mean - ts_gdp_test)^2
+rmse_sarima <- sqrt(mean(squared_diff_sarima))
+
+# Print RMSE
+plot(forecast_sarima)
+print(paste("RMSE:", rmse_sarima))
+```
+
+```{r}
+summary(fit_sar1)
+summary(fit_sar2)
+```
+```{r}
+#coeftest(fit_sar1) 
+#coeftest(fit_sar2) 
+
+```
+
+## Plot the forecast
+```{r}
+#win.graph(width=10, height=6,pointsize=12)
+autoplot(ts_gdp_train) +
+  autolayer(forecast_sarima, series="SARIMA")+
+  # autolayer(Model_Arima_forecast$mean, series="SARIMA")+
+  ggtitle("Forecasts for quarterly UK GDP(1995-2015)") +
+  xlab("time") + ylab("GDP")
+```
+
+
+
+
+
+
+
+### APPENDIX Transformation 
+
+```{r}
+
+# pre-intervention period
+
+ly <- log(ts_gdp)
+dly1 <-diff(ly)
+dly4 <- diff(ly, lag=4)
+d2ly1_4 <- diff(diff(ly), lag=4)
+
+library(forecast)
+# Original and transformed data
+par(mfrow = c(2, 3))
+plot(ts_gdp, main = expression(ts_gdp))
+plot(ly, main = expression(log(ts_gdp)))
+
+plot.new()
+plot(dly1, ylab='', xlab='year', main=expression(paste(Delta, "log(y)")))
+plot(dly4, ylab='', xlab='year', main=expression(paste(Delta[4], "log(y)")))
+plot(d2ly1_4, ylab='', xlab='year', main=expression(paste(Delta,Delta[4], "log(y)")))
+
+
+# ACFs and PACFs
+maxlag <- 60
+par(mfrow=c(2,4), mar=c(3,3,4,2))
+Acf(ly, type="correlation", lag.max=maxlag, main=expression(paste("ACF for log(y)")))
+Acf(dly1, type="correlation", lag.max=maxlag, main=expression(paste("ACF for ",Delta, "log(y)")))
+Acf(dly4, type="correlation", lag.max=maxlag, main=expression(paste("ACF for ",Delta[4], "log(y)")))
+Acf(d2ly1_4, type="correlation", lag.max=maxlag, main=expression(paste("ACF for ",Delta,Delta[4], "log(y)")))
+
+Acf(ly, type="partial", lag.max=maxlag, main=expression(paste("PACF for log(y)")))
+Acf(dly1, type="partial", lag.max=maxlag, main=expression(paste("PACF for ",Delta, "log(y)")))
+Acf(dly4, type="partial", lag.max=maxlag, main=expression(paste("PACF for ",Delta[4], "log(y)")))
+Acf(d2ly1_4, type="partial", lag.max=maxlag, main=expression(paste("PACF for ",Delta,Delta[4], "log(y)")))
+
+
+
+
+```
+
+```{r}
+
+# pre-intervention period
+
+dy1 <-diff(ts_gdp)
+dy4 <- diff(ts_gdp, lag=4)
+d2y1_4 <- diff(diff(ts_gdp), lag=4)
+
+
+library(forecast)
+# Original and transformed data
+par(mfrow = c(2, 3))
+plot(ts_gdp, main = expression(ts_gdp))
+
+plot.new()
+plot.new()
+plot(dy1, ylab='', xlab='year', main=expression(paste(Delta, "y")))
+plot(dy4, ylab='', xlab='year', main=expression(paste(Delta[4], "y")))
+plot(d2y1_4, ylab='', xlab='year', main=expression(paste(Delta,Delta[4], "y")))
+
+
+# ACFs and PACFs
+maxlag <- 60
+par(mfrow=c(2,4), mar=c(3,3,4,2))
+Acf(ts_gdp, type="correlation", lag.max=maxlag, main=expression(paste("ACF for y")))
+Acf(dy1, type="correlation", lag.max=maxlag, main=expression(paste("ACF for ",Delta, "y")))
+Acf(dy4, type="correlation", lag.max=maxlag, main=expression(paste("ACF for ",Delta[4], "y")))
+Acf(d2y1_4, type="correlation", lag.max=maxlag, main=expression(paste("ACF for ",Delta,Delta[4], "y")))
+
+Acf(ts_gdp, type="partial", lag.max=maxlag, main=expression(paste("PACF for y")))
+Acf(dy1, type="partial", lag.max=maxlag, main=expression(paste("PACF for ",Delta, "y")))
+Acf(dy4, type="partial", lag.max=maxlag, main=expression(paste("PACF for ",Delta[4], "y")))
+Acf(d2y1_4, type="partial", lag.max=maxlag, main=expression(paste("PACF for ",Delta,Delta[4], "y")))
+
+
+
+
+```
+
+
+
