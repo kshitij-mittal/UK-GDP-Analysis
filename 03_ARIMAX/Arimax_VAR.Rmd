@@ -102,12 +102,6 @@ This indicates that the process might be an Autoregressive process of Order 3
 
 Since both ACF and PACF are trailing off, this model can also be an ARMA model 
 
-### Seasonal differencing is needed for Seasonal Arima
-```{r}
-ts_gdp_train_seasonal_diff <- diff(ts_gdp_train, difference = 4)
-tsdisplay(ts_gdp_train_seasonal_diff)
-``` 
-
 ## Dividing into Train and Test prior to Model Fitting
 ```{r}
 # Perform train-test split
