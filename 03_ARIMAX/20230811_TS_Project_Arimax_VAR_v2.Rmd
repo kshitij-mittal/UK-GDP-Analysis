@@ -59,7 +59,7 @@ tsdisplay(ts_gdp, main = "UK GDP between 1955 and 2015")
 ```
 ```{r}
 par(mfrow = c(4, 1))
-autoplot(ts_ipi, main = "IPI Time Series")
+autoplot(ts_ipi, main = "IPI - Industrial Production Index -  Time Series")
 autoplot(log(ts_ipi), main = "Log IPI Time Series")
 autoplot(ts_int, main = "Interest Rates and Asset Prices Time Series")
 autoplot(ts_cap, main = "Labour Capital Productivity Time Series")
@@ -223,7 +223,7 @@ print(paste("RMSE:", rmse_arimax))
 
 ## Model 3 - Multiple exogenoeus variables with non-seasonal ARIMAX
 ```{r}
-arimax_model_exog <- auto.arima(ts_gdp_train, xreg =exog_train, seasonal = FALSE, lambda = bc_lambda, trace = TRUE)
+arimax_model_exog <- auto.arima(ts_gdp_train, xreg = exog_train, seasonal = FALSE, lambda = bc_lambda, trace = TRUE)
 
 summary(arimax_model_exog)
 coeftest(arimax_model_exog)
@@ -318,4 +318,6 @@ rmse_var <- sqrt(mean(squared_diff))
 
 # Print RMSE
 print(paste("RMSE:", rmse_var))
+accuracy(exp(pred$fcst$y1[, "fcst"]), ts_gdp_test)
+
 ```

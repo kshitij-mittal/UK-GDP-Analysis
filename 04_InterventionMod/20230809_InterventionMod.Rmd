@@ -190,6 +190,7 @@ rmse_arima_int_1 <- sqrt(mean(squared_diff_arima_int_1))
 
 # Print RMSE
 print(paste("RMSE:", rmse_arima_int_1))
+accuracy(forecast_arima_int_1, ts_gdp_test)
 ```
 
 
@@ -217,6 +218,7 @@ rmse_arima_int_2 <- sqrt(mean(squared_diff_arima_int_2))
 
 # Print RMSE
 plot(forecast_arima_int_2)
+accuracy(forecast_arima_int_2, ts_gdp_test)
 print(paste("RMSE:", rmse_arima_int_2))
 
 ```
