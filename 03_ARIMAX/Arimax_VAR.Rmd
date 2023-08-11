@@ -1,0 +1,285 @@
+---
+title: "TS - ARIMAX"
+author: "Swathi Ganesan"
+date: "2023-08-10"
+output: html_document
+---
+
+# ARIMA MODELING
+```{r setup, include=FALSE, cache=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+```
+
+
+## Importing Libraries
+```{r, message=FALSE, echo=FALSE}
+# Load required packages
+library(readxl)
+library(ggplot2)
+library(forecast)
+library(ggseas)
+library(zoo)
+library(tseries)
+library(fpp)
+library(MASS)
+library(ggplot2)
+
+library(TSA)
+```
+
+## Loading Data
+```{r}
+# Read the Excel file
+data <- read_excel("TS_Project_Data.xlsx")
+
+# Convert the 'Period' column to year-quarter format
+data$Period <- as.yearqtr(data$Period, format = "%Y Q%q")
+
+# Convert "Period" to a Date object
+data$Period <- as.Date(paste(data$Period, "01", sep = "-"), format = "%Y Q%m-%d")
+
+# Extract year and quarter components
+data$Year <- as.numeric(format(data$Period, "%Y"))
+data$Quarter <- as.numeric(format(data$Period, "%m"))
+
+# Create a time series object
+ts_gdp <- ts(data$GDP, start = c(data$Year[1], data$Quarter[1]), frequency = 4)
+ts_ipi <- ts(data$IPI, start = c(data$Year[1], data$Quarter[1]), frequency = 4)
+ts_int <- ts(data$InterestRates_AssetPrices, start = c(data$Year[1], data$Quarter[1]), frequency = 4)
+ts_cap <- ts(data$Labour_Capital_Prod, start = c(data$Year[1], data$Quarter[1]), frequency = 4)
+
+# Create a matrix of exogenous variables
+exog_matrix <- cbind(ts_ipi, ts_int, ts_cap)
+exog_train <- window(exog_matrix, end = c(2010, 4))
+exog_test <- window(exog_matrix, start = c(2011, 1))
+
+#Plotting the time series
+tsdisplay(ts_gdp, main = "UK GDP between 1955 and 2015")
+```
+## Assumption 1 - Constant Variance using BoxPlot Transformation
+
+```{r}
+# Load required packages
+bc_lambda=BoxCox.lambda(ts_gdp)
+ts_gdp %>% BoxCox(lambda = bc_lambda) %>% autoplot()
+ts_gpd_bc = BoxCox(ts_gdp, lambda = bc_lambda)
+
+# If the data show variation that increases or decreases with the level of the series, then a boxcox transformation can be useful.
+```
+
+## Assumption 2 - Stationarity is important for fitting Arima Models
+ARIMA uses previous lags of series to model its behavior; therefore, modeling stable series with consistent properties involves less uncertainty.
+
+```{r}
+# RUNNING ADF AND KPSS TEST
+adf_test <- adf.test(ts_gpd_bc)
+print(adf_test)
+kpss_test <- kpss.test(ts_gpd_bc)
+print(kpss_test)
+
+```
+
+Data can be seen as non-stationary
+
+```{r}
+# Differencing the time series
+ts_gdp_bc_diff <- diff(ts_gpd_bc)
+
+# Check the stationarity of the differenced series using ADF and KPSS tests
+adf_test_result_diff <- adf.test(ts_gdp_bc_diff)
+kpss_test_result_diff <- kpss.test(ts_gdp_bc_diff)
+
+print(adf_test_result_diff)
+print(kpss_test_result_diff)
+
+tsdisplay(ts_gdp_bc_diff)
+```
+
+Data seems stationary post single order differencing.
+From observations, we can see an exponential decay in the ACF plot, along with hard drops in the PACF plot.
+This indicates that the process might be an Autoregressive process of Order 3 
+
+Since both ACF and PACF are trailing off, this model can also be an ARMA model 
+
+### Seasonal differencing is needed for Seasonal Arima
+```{r}
+ts_gdp_train_seasonal_diff <- diff(ts_gdp_train, difference = 4)
+tsdisplay(ts_gdp_train_seasonal_diff)
+``` 
+
+## Dividing into Train and Test prior to Model Fitting
+```{r}
+# Perform train-test split
+ts_gdp_train <- window(ts_gdp, end = c(2010, 4))  # Training data until 2009 Q4
+ts_gdp_test <- window(ts_gdp, start = c(2011, 1)) # Test data from 2010 Q1 onwards
+number_of_forecasts = 20
+
+# Plot time series of train and test data
+ggplot() +
+  geom_line(data = as.data.frame(ts_gdp_train), aes(x = time(ts_gdp_train), y = ts_gdp_train), color = "blue", linetype = "solid", size = 1) +
+  geom_line(data = as.data.frame(ts_gdp_test), aes(x = time(ts_gdp_test), y = ts_gdp_test), color = "red", linetype = "solid", size = 1) +
+  labs(title = "Time Series of Train and Test Data", x = "Year", y = "Value") +
+  theme_minimal()
+```
+
+## Model 1 - Non Seasonal Auto ARIMAX
+```{r}
+arimax_model <- auto.arima(ts_gdp_train, xreg =window(ts_ipi, end = c(2010, 4)), seasonal = FALSE, lambda = bc_lambda, trace = TRUE)
+arimax_model
+eacf(ts_gdp_train)
+```
+
+
+## Analysing Forecasts from the Non-Seasonal ARIMAX Model
+```{r}
+# Forecast using the ARIMAX model
+forecast_arimax <- forecast(arimax_model, xreg = window(ts_ipi, start = c(2011, 1)), h = number_of_forecasts)
+
+# Plot the forecast results
+plot(forecast_arimax)
+
+# Checking for RMSE
+squared_diff_arimax <- (forecast_arimax$mean - ts_gdp_test)^2
+rmse_arimax <- sqrt(mean(squared_diff_arimax))
+
+# Calculate accuracy metrics (e.g., MAE, RMSE) to evaluate the forecast
+accuracy(forecast_arimax, ts_gdp_test)
+
+# Check residuals
+checkresiduals(residuals(forecast_arimax))
+
+# Print RMSE
+print(paste("RMSE:", rmse_arimax))
+```
+#ARIMA(3,1,2) 
+The Ljung-Box test evaluates the null hypothesis that the residuals are not autocorrelated. In this case, the high p-value of 0.9527 suggests that there is no significant evidence to reject the null hypothesis. This indicates that the residuals are likely behaving as white noise, showing no substantial autocorrelation at the specified lags.
+
+
+## Model 2 - Seasonal ARIMAX
+```{r}
+arimax_model_seasonal <- auto.arima(ts_gdp_train, xreg =window(ts_ipi, end = c(2010, 4)), seasonal = TRUE, lambda = bc_lambda, trace = TRUE)
+
+arimax_model_seasonal
+```
+
+## Analysing Forecasts from the Seasonal ARIMAX Model
+
+```{r}
+# Forecast using the ARIMAX model
+forecast_arimax <- forecast(arimax_model_seasonal, xreg = window(ts_ipi, start = c(2011, 1)), h = number_of_forecasts)
+
+# Plot the forecast results
+plot(forecast_arimax)
+
+# Checking for RMSE
+squared_diff_arimax <- (forecast_arimax$mean - ts_gdp_test)^2
+rmse_arimax <- sqrt(mean(squared_diff_arimax))
+
+# Calculate accuracy metrics (e.g., MAE, RMSE) to evaluate the forecast
+accuracy(forecast_arimax, ts_gdp_test)
+
+# Check residuals
+checkresiduals(residuals(forecast_arimax))
+
+# Print RMSE
+print(paste("RMSE:", rmse_arimax))
+```
+
+## Model 3 - Multiple exogenoeus variables with non-seasonal ARIMAX
+```{r}
+arimax_model_exog <- auto.arima(ts_gdp_train, xreg =exog_train, seasonal = FALSE, lambda = bc_lambda, trace = TRUE)
+
+arimax_model_exog
+```
+
+```{r}
+# Forecast using the ARIMAX model
+forecast_arimax <- forecast(arimax_model_exog, xreg = exog_test, h = number_of_forecasts)
+
+# Plot the forecast results
+plot(forecast_arimax)
+
+# Checking for RMSE
+squared_diff_arimax <- (forecast_arimax$mean - ts_gdp_test)^2
+rmse_arimax <- sqrt(mean(squared_diff_arimax))
+
+# Calculate accuracy metrics (e.g., MAE, RMSE) to evaluate the forecast
+accuracy(forecast_arimax, ts_gdp_test)
+
+# Check residuals
+checkresiduals(residuals(forecast_arimax))
+
+# Print RMSE
+print(paste("RMSE:", rmse_arimax))
+```
+
+## Model 4 - Multiple exogenoeus variables with seasonal ARIMAX
+```{r}
+arimax_model_seasonal_exog <- auto.arima(ts_gdp_train, xreg =exog_train, seasonal = TRUE, lambda = bc_lambda, trace = TRUE)
+
+arimax_model_seasonal_exog
+```
+
+```{r}
+# Forecast using the ARIMAX model
+forecast_arimax <- forecast(arimax_model_seasonal_exog, xreg = exog_test, h = number_of_forecasts)
+
+# Plot the forecast results
+plot(forecast_arimax)
+
+# Checking for RMSE
+squared_diff_arimax <- (forecast_arimax$mean - ts_gdp_test)^2
+rmse_arimax <- sqrt(mean(squared_diff_arimax))
+
+# Calculate accuracy metrics (e.g., MAE, RMSE) to evaluate the forecast
+accuracy(forecast_arimax, ts_gdp_test)
+
+# Check residuals
+checkresiduals(residuals(forecast_arimax))
+
+# Print RMSE
+print(paste("RMSE:", rmse_arimax))
+```
+
+
+## Model 5: VAR Model
+#VAR models are used to capture the relationships and interactions among multiple time series variables.
+
+```{r}
+# Check out other models
+VARselect(cbind(log(data$GDP), log(data$IPI)), lag.max = 10, type="both", season = 12)$selection
+```
+
+We can proceed by picking the lag order based on the AIC (Akaike Information Criterion) for the ability to capture the underlying patterns in the data with a simple method and hence proceed with p=5.
+
+```{r}
+# Assuming df is your data frame
+train_rows <- data[1:224, c("GDP", "IPI")]
+var_gdp_ipi <- VAR(cbind(log(train_rows$GDP), log(train_rows$IPI)), p = 5, type = "both", season = 4)
+
+pred <- predict(var_gdp_ipi, n.ahead = number_of_forecasts)
+
+# Extract predicted GDP starting from a specific period
+gdp_pred <- ts(pred$fcst$y1[, "fcst"], start = c(2011, 1), frequency = 4)
+ipi_pred <- ts(pred$fcst$y2[, "fcst"], start = c(2011, 1), frequency = 4)
+
+# Plot predicted GDP
+ts.plot(cbind(log(ts_gdp_train), gdp_pred), col = c("blue", "red"),
+        lty = c(1, 1),
+        lwd = c(1, 2), main = "Forecast of GDP", ylab = "log(GDP)", xlab = "Period") 
+
+# Plot predicted GDP
+ts.plot(cbind(window(log(ts_ipi), end = c(2010, 4)), ipi_pred), col = c("blue", "red"),
+        lty = c(1, 1),
+        lwd = c(1, 2), main = "Forecast of IPI", ylab = "log(IPI)", xlab = "Period") 
+```
+
+```{r}
+# Checking for RMSE
+squared_diff <- (exp(pred$fcst$y1[, "fcst"]) - ts_gdp_test)^2
+rmse_var <- sqrt(mean(squared_diff))
+
+# Print RMSE
+print(paste("RMSE:", rmse_var))
+```
