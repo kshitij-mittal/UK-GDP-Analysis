@@ -207,110 +207,84 @@ plot(decompose(ts_gdp))
 
 ### Seasonal differencing is needed for Seasonal Arima
 ```{r}
-ts_gdp_bc_diff_sdiff <- diff(ts_gdp_bc_diff, difference = 4) 
 
-# Check the stationarity of the differenced series using ADF and KPSS tests
-adf_test_result_diff_sdiff <- adf.test(ts_gdp_bc_diff_sdiff)
-kpss_test_result_diff_sdiff <- kpss.test(ts_gdp_bc_diff_sdiff)
+# boxcox
+ts_gdp_bc = BoxCox(ts_gdp, lambda = bc_lambda)
 
-print(adf_test_result_diff_sdiff)
-print(kpss_test_result_diff_sdiff)
+# FIRST SEASONAL DIFFERENCE 
+ts_gdp_bc_sdiff <- diff(ts_gdp_bc, difference = 4) 
+tsdisplay(ts_gdp_bc_sdiff)
 
-tsdisplay(ts_gdp_bc_diff_sdiff)
+# Check the stationarity of the seasonally differenced series using ADF and KPSS tests
+adf.test(ts_gdp_bc_sdiff)
+kpss.test(ts_gdp_bc_sdiff)
 
 ``` 
-ADF test's P-value: 0.01 < 0.05 ==> reject the null(timeseries contains a unitroot and non-stationary)
-KPSS test's P-value: 0.1 > 0.05 ==> fail to reject the null(timeseries is stationary) 
+From plot we see auto correlation at lag 1 and 2
 
-==Data adjusted by Boxcox,1st differencing and seasonal differencing get stationary. 
+```{r}
 
+# SECOND NON-SEASONAL DIFFERENCE 
+ts_gdp_bc_sdiff_diff <- diff(ts_gdp_bc_sdiff) 
+tsdisplay(ts_gdp_bc_sdiff_diff)
 
+# Check the stationarity of the differenced series using ADF and KPSS tests
+adf.test(ts_gdp_bc_sdiff_diff)
+kpss.test(ts_gdp_bc_sdiff_diff)
 
-
+``` 
 ## Model Fitting 2 - Seasonal Auto Arima
 ```{r}
-Model_sarima <-auto.arima(ts_gdp_train,seasonal=TRUE, lambda = bc_lambda, trace = TRUE)
+Model_sarima <-auto.arima(ts_gdp_train ,seasonal=TRUE, lambda = bc_lambda, trace = TRUE)
 Model_sarima
+coeftest(Model_sarima)
 # RUNNING EACF ON FIRST ORDER DIFFERENCE and boxcox tranformed TRAIN DATA wrapping in seasonal differencing.
-eacf(ts_gdp_bc_diff_sdiff)
 ```
-
-
-EACF run for seasonal differenced data indicates using (1,2) and (2,2) models. We can run these also to check if we observe better model fits
+EACF run for seasonal differenced data indicates using (1,2) and (2,2) models. 
+We can run these also to check if we observe better model fits
 
 
 ```{r}
 fit_sar1=Arima(ts_gdp_train, order=c(2,1,2), seasonal = list(order = c(0,0,2),period=4), include.drift = TRUE, lambda = bc_lambda) 
-fit_sar2=Arima(ts_gdp_train, order=c(2,1,2), seasonal = list(order = c(1,0,2),period=4), include.drift = TRUE, lambda = bc_lambda) 
-fit_sar3=Arima(ts_gdp_train, order=c(2,1,2), seasonal = list(order = c(2,0,2),period=4), include.drift = TRUE, lambda = bc_lambda) 
-
 fit_sar1$aicc
-fit_sar2$aicc
-fit_sar3$aicc
 ```
 
 ```{r}
-checkresiduals(Model_sarima)
-
+checkresiduals(fit_sar1)
 ```
 
 Jung test shows that p-value is 0.27 > 0.05 --> fail to reject(accept) the null hypothesis(the Timeseries is independently distributed)
-
-
-```{r}
-checkresiduals(fit_sar2)
-
-```
-
-
-As the AICc score of (2,1,2)(1,0,2)[4] among them was the lowest, we are changing the SArima indicated SARIMA(2,1,2)(1,0,2)[4] model with drift.
-We will now check forecasts from this model
-
-
-## Analysing Forecasts from the Seasonal Arima Model
-```{r}
-forecast_sarima=forecast(Model_sarima, h= number_of_forecasts)
-plot(forecast_sarima, main = "Sarima(2,1,2)(0,0,2)[4] Forecasted Values")
-
-
-```
-
 The residuals look normally distributed with no siginficant auto-correlation at any lags.
 The model also passes the Ljung Box test, and we cannot reject the null hypothesis that there is no auto-correlation in the residuals.
 
 
+
+## Analysing Forecasts from the Seasonal Arima Model
+```{r}
+forecast_sarima=forecast(fit_sar1, h= number_of_forecasts)
+plot(forecast_sarima, main = "SARIMA(2,1,2)(0,0,2)[4] Forecasted Values")
+
+```
+
+
 ```{r}
 # Checking for RMSE
-#ts_gdp_test_bc = BoxCox(ts_gdp_test, lambda = bc_lambda).  BIG
-#ts_gdp_test_diff <- diff(ts_gdp_test_bc).  BIG
-#ts_gdp_test_bc_diff_sdiff <-diff(ts_gdp_test_diff, difference =4) BIG
 
 squared_diff_sarima <- (forecast_sarima$mean - ts_gdp_test)^2
 rmse_sarima <- sqrt(mean(squared_diff_sarima))
 
 # Print RMSE
-plot(forecast_sarima)
+accuracy(forecast_sarima, ts_gdp_test)
 print(paste("RMSE:", rmse_sarima))
-```
-
-```{r}
-summary(fit_sar1)
-summary(fit_sar2)
-```
-```{r}
-#coeftest(fit_sar1) 
-#coeftest(fit_sar2) 
-
 ```
 
 ## Plot the forecast
 ```{r}
-#win.graph(width=10, height=6,pointsize=12)
 autoplot(ts_gdp_train) +
-  autolayer(forecast_sarima, series="SARIMA")+
-  # autolayer(Model_Arima_forecast$mean, series="SARIMA")+
-  ggtitle("Forecasts for quarterly UK GDP(1995-2015)") +
+  autolayer(forecast_sarima$mean, series="SARIMA")+
+  ggtitle("Forecasts for quarterly UK GDP(2011-2015)") +
   xlab("time") + ylab("GDP")
+
 ```
 
 
