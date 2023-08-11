@@ -161,7 +161,7 @@ Differencing (Integration) of order 1 is consistent with our prior observations.
 breakpoint=215 # Index for 2008-Q2 in ts_gdp_train
 
 # ASSIGNING A STEP FUNCTION FOR LEVEL
-level2 <- c(rep(0, breakpoint), 
+level <- c(rep(0, breakpoint), 
               rep(1, length(ts_gdp_train) - breakpoint))
 
 fit_ar_int_1= Arima(ts_gdp_train, order = c(0,1,3), xreg = level, lambda = bc_lambda, include.drift = TRUE)
@@ -221,8 +221,6 @@ print(paste("RMSE:", rmse_arima_int_2))
 
 ```
 
-
-
 ## Intervention Modeling - Step Function using ARIMAX
 
 ```{r}
@@ -270,8 +268,6 @@ coeftest(fit_arimax_2)
 checkresiduals(residuals(fit_arimax_2))
 
 ```
-
-
 
 ```{r}
 
