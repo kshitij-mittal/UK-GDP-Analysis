@@ -152,6 +152,7 @@ The model also passes the Ljung Box test, and we cannot reject the null hypothes
 # Checking for RMSE
 squared_diff_arima <- (forecast_arima$mean - ts_gdp_test)^2
 rmse_arima <- sqrt(mean(squared_diff_arima))
+accuracy(forecast_arima, ts_gdp_test)
 
 # Print RMSE
 print(paste("RMSE:", rmse_arima))

@@ -57,6 +57,15 @@ exog_test <- window(exog_matrix, start = c(2011, 1))
 #Plotting the time series
 tsdisplay(ts_gdp, main = "UK GDP between 1955 and 2015")
 ```
+```{r}
+par(mfrow = c(4, 1))
+autoplot(ts_ipi, main = "IPI Time Series")
+autoplot(log(ts_ipi), main = "Log IPI Time Series")
+autoplot(ts_int, main = "Interest Rates and Asset Prices Time Series")
+autoplot(ts_cap, main = "Labour Capital Productivity Time Series")
+par(mfrow = c(1, 1))
+```
+
 ## Assumption 1 - Constant Variance using BoxPlot Transformation
 
 ```{r}
@@ -117,13 +126,14 @@ ggplot() +
   theme_minimal()
 ```
 
-## Model 1 - Non Seasonal Auto ARIMAX
+## Model 1 - Non Seasonal Auto ARIMAX with IPI Regressor
 ```{r}
 arimax_model <- auto.arima(ts_gdp_train, xreg =window(ts_ipi, end = c(2010, 4)), seasonal = FALSE, lambda = bc_lambda, trace = TRUE)
-arimax_model
-eacf(ts_gdp_train)
-```
+# arimax_model <- Arima(ts_gdp_train, order = c(3,1,2) ,xreg = window(ts_ipi, end = c(2010, 4)), lambda = bc_lambda, include.drift = TRUE)
 
+arimax_model
+coeftest(arimax_model)
+```
 
 ## Analysing Forecasts from the Non-Seasonal ARIMAX Model
 ```{r}
@@ -148,6 +158,37 @@ print(paste("RMSE:", rmse_arimax))
 ```
 #ARIMA(3,1,2) 
 The Ljung-Box test evaluates the null hypothesis that the residuals are not autocorrelated. In this case, the high p-value of 0.9527 suggests that there is no significant evidence to reject the null hypothesis. This indicates that the residuals are likely behaving as white noise, showing no substantial autocorrelation at the specified lags.
+
+
+## Model 1-2 - Non Seasonal Auto ARIMAX with Log IPI Regressor
+```{r}
+arimax_model_log <- auto.arima(ts_gdp_train, xreg =window(log(ts_ipi), end = c(2010, 4)), seasonal = FALSE, lambda = bc_lambda, trace = TRUE)
+arimax_model_log <- Arima(ts_gdp_train, order=c(2,2,2), xreg =window(log(ts_ipi), end = c(2010, 4)), lambda = bc_lambda, include.drift = TRUE )
+
+arimax_model_log
+coeftest(arimax_model_log)
+```
+
+```{r}
+# Forecast using the ARIMAX model
+forecast_arimax_log <- forecast(arimax_model_log, xreg = window(log(ts_ipi), start = c(2011, 1)), h = number_of_forecasts)
+
+# Plot the forecast results
+plot(forecast_arimax_log)
+
+# Checking for RMSE
+squared_diff_arimax_log <- (forecast_arimax_log$mean - ts_gdp_test)^2
+rmse_arimax_log <- sqrt(mean(squared_diff_arimax_log))
+
+# Calculate accuracy metrics (e.g., MAE, RMSE) to evaluate the forecast
+accuracy(forecast_arimax_log, ts_gdp_test)
+
+# Check residuals
+checkresiduals(residuals(forecast_arimax_log))
+
+# Print RMSE
+print(paste("RMSE:", rmse_arimax_log))
+```
 
 
 ## Model 2 - Seasonal ARIMAX
@@ -184,7 +225,8 @@ print(paste("RMSE:", rmse_arimax))
 ```{r}
 arimax_model_exog <- auto.arima(ts_gdp_train, xreg =exog_train, seasonal = FALSE, lambda = bc_lambda, trace = TRUE)
 
-arimax_model_exog
+summary(arimax_model_exog)
+coeftest(arimax_model_exog)
 ```
 
 ```{r}
