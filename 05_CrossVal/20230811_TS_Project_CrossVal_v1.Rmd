@@ -1,0 +1,54 @@
+---
+title: "Time Series Cross-Validation"
+author: "Kshitij Mittal"
+date: "2023-08-11"
+output: html_document
+---
+
+```{r setup, include=FALSE, cache=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+```
+
+
+# Data Imports
+## Importing Libraries
+```{r, message=FALSE, echo=FALSE}
+# Load required packages
+library(readxl)
+library(ggplot2)
+library(forecast)
+library(ggseas)
+library(zoo)
+library(tseries)
+library(fpp)
+library(MASS)
+library(ggplot2)
+library(lmtest)
+library(strucchange)
+
+library(TSA)
+```
+
+## Loading Data
+```{r}
+# Read the Excel file
+data <- read_excel("TS_Project_Data.xlsx")
+
+# Convert the 'Period' column to year-quarter format
+data$Period <- as.yearqtr(data$Period, format = "%Y Q%q")
+
+# Convert "Period" to a Date object
+data$Period <- as.Date(paste(data$Period, "01", sep = "-"), format = "%Y Q%m-%d")
+
+# Extract year and quarter components
+data$Year <- as.numeric(format(data$Period, "%Y"))
+data$Quarter <- as.numeric(format(data$Period, "%m"))
+
+# Create a time series object
+ts_gdp <- ts(data$GDP, start = c(data$Year[1], data$Quarter[1]), frequency = 4)
+
+#Plotting the time series
+autoplot(ts_gdp, main = "UK GDP between 1955 and 2015")
+tsdisplay(ts_gdp, main = "UK GDP between 1955 and 2015")
+```
