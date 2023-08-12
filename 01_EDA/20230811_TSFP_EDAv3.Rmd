@@ -113,9 +113,9 @@ Interpretation: The p-value (0.09535) is greater than the significance level (us
 
 ```{r}
 # Perform train-test split
-train_data <- window(ts_gdp, end = c(2009, 4))  # Training data until 2009 Q4
-test_data <- window(ts_gdp, start = c(2010, 1)) # Test data from 2010 Q1 onwards
-number_of_forecasts = 24
+train_data <- window(ts_gdp, end = c(2010, 4))  # Training data until 2009 Q4
+test_data <- window(ts_gdp, start = c(2011, 1)) # Test data from 2010 Q1 onwards
+number_of_forecasts = 20
 
 # Plot time series of train and test data
 ggplot() +
@@ -208,8 +208,8 @@ plot(m_Damped_multi)
 
 ```{r}
 # Perform train-test split
-train_data <- window(ts_gdp, end = c(2009, 4))  # Training data until 2009 Q4
-test_data <- window(ts_gdp, start = c(2010, 1)) # Test data from 2010 Q1 onwards
+train_data <- window(ts_gdp, end = c(2010, 4))  # Training data until 2009 Q4
+test_data <- window(ts_gdp, start = c(2011, 1)) # Test data from 2010 Q1 onwards
 number_of_forecasts = 24
 
 # Plot time series of train and test data
@@ -233,7 +233,9 @@ squared_hw <- (forecast_values_hw_add$mean - test_data)^2
 rmse_hw <- sqrt(mean(squared_hw))
 
 # Print RMSE
+print(paste("AIC:", hw_add_damp$model$aicc))
 print(paste("RMSE:", rmse_hw))
+accuracy(forecast_values_hw_add, test_data)
 ```
 
 ```

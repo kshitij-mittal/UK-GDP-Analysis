@@ -369,8 +369,6 @@ Acf(dy4, type="partial", lag.max=maxlag, main=expression(paste("PACF for ",Delta
 Acf(d2y1_4, type="partial", lag.max=maxlag, main=expression(paste("PACF for ",Delta,Delta[4], "y")))
 
 
-
-
 ```
 
 

@@ -158,3 +158,120 @@ accuracy(forecast_arima, ts_gdp_test)
 print(paste("RMSE:", rmse_arima))
 ```
 
+
+```{r}
+# CROSS VALIDATION
+
+k=160                   # minimum data length for fitting a model
+n=length(ts_gdp_train) # number of data points
+p=4                    # Period
+H=1 # Horizon Period
+
+st <- tsp(ts_gdp_train)[1]+(k-2)/p #  gives the start time in time units,
+
+# MAE
+mae_1 = matrix(NA,n-k,H)
+mae_2 = matrix(NA,n-k,H)
+
+# ERROR
+err_1 = matrix(NA,n-k,H)
+err_2 = matrix(NA,n-k,H)
+
+# ERROR
+rmse_1 = numeric()
+rmse_2 = numeric()
+
+# AIC
+aicc_1 = numeric()
+aicc_2 = numeric()
+```
+
+
+```{r}
+
+for(i in 1:(n-k))
+{
+  
+  ### One Month rolling forecasting
+  
+  # Expanding Window 
+  train_1 <- window(ts_gdp_train, end=st + i/p)  ## Window Length: k+i
+  
+  # Sliding Window - keep the training window of fixed length. 
+  # The training set always consists of k observations.
+  train_2 <- window(ts_gdp_train, start=st+(i-k+1)/p, end=st+i/p)  ## Window Length: k
+  
+  # Test Data
+  test <- window(ts_gdp_train, start=st + (i+1)/p, end=st + (i+H)/p) ## Window Length: H
+
+  if (i<(n-k)) 
+    {
+  cat(c("*** CV", i,":","len(Expanding Window):",length(train_1), "len(Sliding Window):",length(train_2), "len(Test):",length(test),'\n'  ))
+  cat(c("*** TRAIN -  Expanding WIndow:",tsp(train_1)[1],'-',tsp(train_1)[2],'\n'))
+  cat(c("*** TRAIN - Sliding WIndow:",tsp(train_2)[1],'-',tsp(train_2)[2],'\n'))
+  cat(c("*** TEST:",tsp(test)[1],'-',tsp(test)[2],'\n'))
+  cat("*************************** \n \n")
+  }
+  
+  # ARIMA Model - Expanding Window
+  fit_1 <- Arima(train_1, order=c(0,1,3), include.drift=TRUE, lambda=bc_lambda, method="ML")
+  fcast_1 <- forecast(fit_1, h=H)
+  
+  # ARIMA Model - Sliding Window
+  fit_2 <- Arima(train_2, order=c(0,1,3), include.drift=TRUE, lambda=bc_lambda, method="ML")
+  fcast_2 <- forecast(fit_2, h=H)
+  
+  # MAE
+  mae_1[i,1:length(test)] <- abs(fcast_1[['mean']]-test)
+  mae_2[i,1:length(test)] <- abs(fcast_2[['mean']]-test)
+  # RMSE
+  err_1[i,1:length(test)] <- fcast_1[['mean']]-test
+  err_2[i,1:length(test)] <- fcast_2[['mean']]-test
+  
+  
+  
+  
+  # AIC
+  aicc_1 <- append(aicc_1, fit_1$aicc)
+  aicc_2 <- append(aicc_2, fit_2$aicc)
+  }
+```
+
+
+
+```{r}
+# CROSS VALIDATION
+
+library(graphics)
+library(fpp)
+library(igraph)
+plot(1:1, colMeans(mae_1,na.rm=TRUE), type="l",col=1,xlab="horizon", 
+     ylab="MAE", main = 'Mean Absolute Forecast Error (MAE) vs forecast horizon')
+lines(1:1, colMeans(mae_2,na.rm=TRUE), type="l",col=2)
+
+legend("bottomright",legend=c("ARIMA - Expanding Window","ARIMA - Sliding Window") ,col=1:2,lty=1)
+```
+
+
+```{r}
+# RMSE ACROSS ITERATIONS
+
+library(graphics)
+library(fpp)
+library(igraph)
+plot(0:63, mae_1, type="l",col=1,xlab="Iterations", 
+     ylab="MAE", main = 'Mean Absolute Forecast Error (MAE) vs Iterations')
+lines(0:63, mae_2, type="l",col=2)
+
+legend("topleft",legend=c("ARIMA - Expanding Window","ARIMA - Sliding Window") ,col=1:2,lty=1)
+```
+
+
+```{r}
+
+plot(1:20, sqrt(colMeans((err_1)^2,na.rm=TRUE)), type="l",col=1,xlab="horizon", 
+     ylab="RMSE", main = 'Root-square Forecast Error (RMSE) vs forecast horizon')
+lines(1:20, sqrt(colMeans((err_2)^2,na.rm=TRUE)), type="l",col=2)
+
+legend("bottomright",legend=c("ARIMA - Expanding Window","ARIMA - Sliding Window"),col=1:4,lty=1)
+```
