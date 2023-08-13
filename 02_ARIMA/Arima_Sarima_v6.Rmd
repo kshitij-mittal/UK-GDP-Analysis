@@ -66,7 +66,7 @@ options(repr.plot.width = 20, repr.plot.height = 80)  # Adjust the values as nee
 ggplot(data17, aes(x = year, y = UKGDP)) +
   geom_line() +
   labs(x = "Year", y = " UK nominal GDP (£mn)",
-       title = "UK Nominal GDP Time Series" ,
+       title = "United Kingdom GDP" ,
       subtitle = "From 1700 to 2015") + 
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +  # Rotate x-axis labels

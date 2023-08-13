@@ -54,8 +54,10 @@ tsdisplay(ts_gdp, main = "UK GDP between 1955 and 2015")
 ```{r}
 # Load required packages
 bc_lambda=BoxCox.lambda(ts_gdp)
-ts_gdp %>% BoxCox(lambda = bc_lambda) %>% autoplot()
+ts_gdp %>% BoxCox(lambda = bc_lambda) %>% autoplot() + theme_minimal()
 ts_gpd_bc = BoxCox(ts_gdp, lambda = bc_lambda)
+
+autoplot(ts_gdp_bc, ylab = "BoxCox Transformed Quarterly GDP", xlab = "Years", main = "BoxCox Transformation (Lambda = 0.3)") + theme_minimal()
 
 # If the data show variation that increases or decreases with the level of the series, then a boxcox transformation can be useful.
 ```
@@ -67,6 +69,7 @@ ARIMA uses previous lags of series to model its behavior; therefore, modeling st
 # RUNNING ADF AND KPISS TEST
 adf_test <- adf.test(ts_gpd_bc)
 print(adf_test)
+
 kpss_test <- kpss.test(ts_gpd_bc)
 print(kpss_test)
 
@@ -85,7 +88,7 @@ kpss_test_result_diff <- kpss.test(ts_gdp_bc_diff)
 print(adf_test_result_diff)
 print(kpss_test_result_diff)
 
-tsdisplay(ts_gdp_bc_diff)
+tsdisplay(ts_gdp_bc_diff, main = "Non-Seasonal Differencing of Order 1")
 ```
 
 Data seems stationary post single order differencing.

@@ -52,7 +52,7 @@ data$Quarter <- as.numeric(format(data$Period, "%m"))
 ts_gdp <- ts(data$GDP, start = c(data$Year[1], data$Quarter[1]), frequency = 4)
 
 #Plotting the time series
-autoplot(ts_gdp, main = "UK GDP between 1955 and 2015")
+autoplot(ts_gdp, main = "UK Quarterly GDP between 1955 and 2015", xlab = "Years", ylab = "UK Quarterly GDP (£mn)") + theme_minimal()
 tsdisplay(ts_gdp, main = "UK GDP between 1955 and 2015")
 ```
 
@@ -135,9 +135,9 @@ ggplot() +
   theme_minimal()
 
 ggplot() +
-  geom_line(data = as.data.frame(ts_gdp_train_pre_int), aes(x = time(ts_gdp_train_pre_int), y = ts_gdp_train_pre_int), color = "blue", linetype = "solid", size = 1) +
-  geom_line(data = as.data.frame(ts_gdp_train_post_int), aes(x = time(ts_gdp_train_post_int), y = ts_gdp_train_post_int), color = "red", linetype = "solid", size = 1) +
-  labs(title = "Time Series of Train Data - Pre and Post Intervention", x = "Year", y = "Value") +
+  geom_line(data = as.data.frame(ts_gdp_train_pre_int), aes(x = time(ts_gdp_train_pre_int), y = ts_gdp_train_pre_int), color = "darkblue", linetype = "solid", size = 1) +
+  geom_line(data = as.data.frame(ts_gdp_train_post_int), aes(x = time(ts_gdp_train_post_int), y = ts_gdp_train_post_int), color = "maroon", linetype = "solid", size = 1) +
+  labs(title = "Time Series of Train Data - Pre and Post Intervention", x = "Year", y = "UK GDP") +
   theme_minimal()
 
 
@@ -157,14 +157,15 @@ Differencing (Integration) of order 1 is consistent with our prior observations.
 
 ```{r}
 
-# Assigning the breakpoint
+# Assigning the breakpoints
 breakpoint=215 # Index for 2008-Q2 in ts_gdp_train
-
 # ASSIGNING A STEP FUNCTION FOR LEVEL
+
 level <- c(rep(0, breakpoint), 
               rep(1, length(ts_gdp_train) - breakpoint))
+fit_ar_int_1= Arima(ts_gdp_train, order = c(0,1,3), xreg = level, include.drift = TRUE)
 
-fit_ar_int_1= Arima(ts_gdp_train, order = c(0,1,3), xreg = level, lambda = bc_lambda, include.drift = TRUE)
+
 summary(fit_ar_int_1)
 coeftest(fit_ar_int_1)
 
@@ -199,12 +200,13 @@ accuracy(forecast_arima_int_1, ts_gdp_test)
 
 # Assigning the breakpoint
 breakpoint=215 # Index for 2008-Q2 in ts_gdp_train
-
 # ASSIGNING A STEP FUNCTION FOR LEVEL
+
 I2008F=1*(seq(ts_gdp_train)==215)
 S2008F=1*(seq(ts_gdp_train)>=215)
 
 fit_ar_int_2= Arima(ts_gdp_train, order = c(0,1,3), xreg = cbind(I2008F, S2008F), lambda = bc_lambda, include.drift = TRUE)
+
 summary(fit_ar_int_2)
 coeftest(fit_ar_int_2)
 
